@@ -53,7 +53,7 @@ public class ClosingUndertowWebSocketClient extends UndertowWebSocketClient {
                     DefaultNegotiation negotiation = new DefaultNegotiation(protocols, headers, builder);
                     builder.setClientNegotiation(negotiation);
                     return builder.connect().addNotifier(
-                            new IoFuture.HandlingNotifier<>() {
+                            new IoFuture.HandlingNotifier<WebSocketChannel, Object>() {
                                 @Override
                                 public void handleDone(final WebSocketChannel channel, final Object attachment) {
                                     ClosingUndertowWebSocketClient.this.handleChannel(url, handler, completion, negotiation, channel);

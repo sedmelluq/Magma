@@ -16,7 +16,11 @@
 
 package space.npstr.magma.connections;
 
-import net.dv8tion.jda.core.audio.factory.IAudioSendFactory;
+import com.sedmelluq.lava.discord.dispatch.AudioSendSystemFactory;
+import com.sedmelluq.lava.discord.dispatch.OpusFrameProvider;
+import com.sedmelluq.lava.discord.dispatch.packet.AudioPacketBuilder;
+import com.sedmelluq.lava.discord.dispatch.packet.AudioPacketProviderHolder;
+import com.sedmelluq.lava.discord.reactor.udp.UdpDiscovery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.reactive.socket.WebSocketHandler;
@@ -57,8 +61,13 @@ import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
+
+import static com.sedmelluq.lava.discord.dispatch.packet.AudioPacketBuilder.NonceStrategy.INCREMENTING_INT;
+import static com.sedmelluq.lava.discord.dispatch.packet.AudioPacketBuilder.NonceStrategy.PACKET_HEADER;
+import static com.sedmelluq.lava.discord.dispatch.packet.AudioPacketBuilder.NonceStrategy.RANDOM_SEQUENCE;
 
 /**
  * Created by napster on 19.04.18.
@@ -71,7 +80,7 @@ public class AudioWebSocket extends BaseSubscriber<InboundWsEvent> {
 
     private final SessionInfo session;
     private final URI wssEndpoint;
-    private final AudioConnection audioConnection;
+    private final UdpDiscovery udpDiscovery;
     private final AudioStackLifecyclePipeline lifecyclePipeline;
     private final WebSocketClient webSocketClient;
 
@@ -80,20 +89,26 @@ public class AudioWebSocket extends BaseSubscriber<InboundWsEvent> {
     //reusable, if prepareConnect() is called before reconnecting
     private final AudioWebSocketSessionHandler webSocketHandler;
 
+    private final AudioPacketProviderHolder packetProviderHolder;
+
     @Nullable
     private Disposable heartbeatSubscription;
     private Disposable webSocketConnection;
 
 
-    public AudioWebSocket(final IAudioSendFactory sendFactory, final SessionInfo session,
-                          final WebSocketClient webSocketClient, final AudioStackLifecyclePipeline lifecyclePipeline) {
+    public AudioWebSocket(final AudioSendSystemFactory sendSystemFactory, final SessionInfo session,
+                          final WebSocketClient webSocketClient, final UdpDiscovery udpDiscovery,
+                          final AudioStackLifecyclePipeline lifecyclePipeline,
+                          final Supplier<OpusFrameProvider> frameProviderSupplier) {
+
+        this.packetProviderHolder = new AudioPacketProviderHolder(this::setSpeaking, frameProviderSupplier, sendSystemFactory);
         this.session = session;
         try {
             this.wssEndpoint = new URI(String.format("wss://%s/?v=4", session.getVoiceServerUpdate().getEndpoint()));
         } catch (final URISyntaxException e) {
             throw new RuntimeException("Endpoint " + session.getVoiceServerUpdate().getEndpoint() + " is not a valid URI", e);
         }
-        this.audioConnection = new AudioConnection(this, sendFactory);
+        this.udpDiscovery = udpDiscovery;
         this.lifecyclePipeline = lifecyclePipeline;
         this.webSocketClient = webSocketClient;
 
@@ -105,11 +120,11 @@ public class AudioWebSocket extends BaseSubscriber<InboundWsEvent> {
         this.webSocketConnection = this.connect(this.webSocketClient, this.wssEndpoint, this.webSocketHandler);
     }
 
-    public AudioConnection getAudioConnection() {
-        return this.audioConnection;
+    public void onFrameProviderUpdated() {
+        packetProviderHolder.onFrameProviderChanged();
     }
 
-    public void setSpeaking(final boolean isSpeaking) {
+    private void setSpeaking(final boolean isSpeaking) {
         final int speakingMask = isSpeaking ? 1 : 0;
         this.send(SpeakingWsEvent.builder()
                 .speakingMask(speakingMask)
@@ -186,8 +201,11 @@ public class AudioWebSocket extends BaseSubscriber<InboundWsEvent> {
         final EncryptionMode preferredMode = preferredModeOpt.get();
         log.debug("Selecting encryption mode {}", preferredMode);
 
-        this.audioConnection.handleUdpDiscovery(udpTargetAddress, ready.getSsrc())
+        packetProviderHolder.onAddressAndSsrcChanged(udpTargetAddress, ready.getSsrc());
+        udpDiscovery.handleUdpDiscovery(udpTargetAddress, ready.getSsrc())
+                .timeout(Duration.ofSeconds(2))
                 .subscribeOn(Schedulers.single())
+                .doOnError(t -> log.error("Exception during UDP discovery.", t))
                 .subscribe(externalAddress -> this.audioWebSocketSink.next(
                         SelectProtocolWsEvent.builder()
                                 .protocol("udp")
@@ -198,10 +216,21 @@ public class AudioWebSocket extends BaseSubscriber<InboundWsEvent> {
     }
 
     private void handleSessionDescription(final SessionDescription sessionDescription) {
-        this.audioConnection.updateSecretKeyAndEncryptionMode(
-                sessionDescription.getSecretKey(),
-                sessionDescription.getEncryptionMode()
-        );
+        packetProviderHolder.onKeyAndStrategyChanged(sessionDescription.getSecretKey(),
+            getNonceStrategy(sessionDescription.getEncryptionMode()));
+    }
+
+    private static AudioPacketBuilder.NonceStrategy getNonceStrategy(EncryptionMode encryptionMode) {
+        switch (encryptionMode) {
+            case XSALSA20_POLY1305_LITE:
+                return INCREMENTING_INT;
+            case XSALSA20_POLY1305_SUFFIX:
+                return RANDOM_SEQUENCE;
+            case XSALSA20_POLY1305:
+                return PACKET_HEADER;
+        }
+
+        throw new IllegalArgumentException();
     }
 
     private void handleWebSocketClosed(final WebSocketClosed webSocketClosed) {
@@ -255,6 +284,6 @@ public class AudioWebSocket extends BaseSubscriber<InboundWsEvent> {
         if (this.heartbeatSubscription != null) {
             this.heartbeatSubscription.dispose();
         }
-        this.audioConnection.shutdown();
+        packetProviderHolder.shutdown();
     }
 }

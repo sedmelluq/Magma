@@ -16,7 +16,8 @@
 
 package space.npstr.magma;
 
-import net.dv8tion.jda.core.audio.factory.IAudioSendFactory;
+import com.sedmelluq.lava.discord.dispatch.AudioSendSystemFactory;
+import com.sedmelluq.lava.discord.reactor.udp.UdpDiscovery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.reactive.socket.client.WebSocketClient;
@@ -24,7 +25,6 @@ import reactor.core.Disposable;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.UnicastProcessor;
 import reactor.core.scheduler.Schedulers;
-import space.npstr.magma.connections.AudioConnection;
 import space.npstr.magma.connections.AudioWebSocket;
 import space.npstr.magma.events.audio.lifecycle.CloseWebSocket;
 import space.npstr.magma.events.audio.lifecycle.ConnectWebSocketLcEvent;
@@ -73,17 +73,18 @@ public class AudioStackLifecyclePipeline {
     // concurrency is handled by modifying this through a single thread eventloop only
     private final Map<String, Map<String, AudioStack>> audioStacks = new HashMap<>();
 
-    private final Function<Member, IAudioSendFactory> sendFactoryProvider;
+    private final Function<Member, AudioSendSystemFactory> sendFactoryProvider;
     private final WebSocketClient webSocketClient;
+    private final UdpDiscovery udpDiscovery;
 
     private final FluxSink<LifecycleEvent> lifecycleEventSink;
     private final Disposable lifecycleSubscription;
 
-    public AudioStackLifecyclePipeline(final Function<Member, IAudioSendFactory> sendFactoryProvider,
-                                       final WebSocketClient webSocketClient) {
+    public AudioStackLifecyclePipeline(final Function<Member, AudioSendSystemFactory> sendFactoryProvider,
+                                       final WebSocketClient webSocketClient, UdpDiscovery udpDiscovery) {
         this.sendFactoryProvider = sendFactoryProvider;
         this.webSocketClient = webSocketClient;
-
+        this.udpDiscovery = udpDiscovery;
 
         final UnicastProcessor<LifecycleEvent> processor = UnicastProcessor.create();
 
@@ -141,6 +142,7 @@ public class AudioStackLifecyclePipeline {
                         new AudioStack(lifecycleEvent.getGuildId(),
                                 this.sendFactoryProvider.apply(lifecycleEvent.getMember()),
                                 this.webSocketClient,
+                                this.udpDiscovery,
                                 this));
     }
 }

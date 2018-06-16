@@ -16,8 +16,9 @@
 
 package space.npstr.magma;
 
-import net.dv8tion.jda.core.audio.AudioSendHandler;
-import net.dv8tion.jda.core.audio.factory.IAudioSendFactory;
+import com.sedmelluq.lava.discord.dispatch.AudioSendSystemFactory;
+import com.sedmelluq.lava.discord.dispatch.OpusFrameProvider;
+import com.sedmelluq.lava.discord.reactor.udp.UdpDiscovery;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.reactive.socket.client.WebSocketClient;
@@ -31,7 +32,6 @@ import space.npstr.magma.events.audio.lifecycle.ConnectWebSocket;
 import space.npstr.magma.events.audio.lifecycle.LifecycleEvent;
 import space.npstr.magma.events.audio.lifecycle.Shutdown;
 import space.npstr.magma.events.audio.lifecycle.UpdateSendHandler;
-import space.npstr.magma.events.audio.lifecycle.UpdateSendHandlerLcEvent;
 
 import javax.annotation.Nullable;
 
@@ -47,8 +47,9 @@ public class AudioStack {
     private static final Logger log = LoggerFactory.getLogger(AudioStack.class);
 
     private final String guildId;
-    private final IAudioSendFactory sendFactory;
+    private final AudioSendSystemFactory sendFactory;
     private final WebSocketClient webSocketClient;
+    private final UdpDiscovery udpDiscovery;
     private final AudioStackLifecyclePipeline lifecyclePipeline;
 
     private final FluxSink<LifecycleEvent> lifecycleSink;
@@ -57,14 +58,16 @@ public class AudioStack {
     @Nullable
     private AudioWebSocket webSocket;
     @Nullable
-    private AudioSendHandler sendHandler;
+    private OpusFrameProvider sendHandler;
 
 
-    public AudioStack(final String guildId, final IAudioSendFactory sendFactory, final WebSocketClient webSocketClient,
+    public AudioStack(final String guildId, final AudioSendSystemFactory sendFactory,
+                      final WebSocketClient webSocketClient, final UdpDiscovery udpDiscovery,
                       final AudioStackLifecyclePipeline lifecyclePipeline) {
         this.guildId = guildId;
         this.sendFactory = sendFactory;
         this.webSocketClient = webSocketClient;
+        this.udpDiscovery = udpDiscovery;
         this.lifecyclePipeline = lifecyclePipeline;
 
         final UnicastProcessor<LifecycleEvent> lifecycleProcessor = UnicastProcessor.create();
@@ -110,21 +113,14 @@ public class AudioStack {
         }
 
         this.webSocket = new AudioWebSocket(this.sendFactory, connectWebSocket.getSessionInfo(),
-                this.webSocketClient, this.lifecyclePipeline);
-        if (this.sendHandler != null) {
-            this.webSocket.getAudioConnection().updateSendHandler(
-                    UpdateSendHandlerLcEvent.builder()
-                            .member(connectWebSocket.getMember())
-                            .audioSendHandler(this.sendHandler)
-                            .build());
-        }
+                this.webSocketClient, this.udpDiscovery, this.lifecyclePipeline, () -> sendHandler);
     }
 
     private void handleUpdateSendHandler(final UpdateSendHandler updateSendHandler) {
         this.sendHandler = updateSendHandler.getAudioSendHandler().orElse(null);
 
         if (this.webSocket != null) {
-            this.webSocket.getAudioConnection().updateSendHandler(updateSendHandler);
+            this.webSocket.onFrameProviderUpdated();
         }
     }
 

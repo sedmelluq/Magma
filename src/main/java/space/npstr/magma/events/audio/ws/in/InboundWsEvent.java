@@ -19,7 +19,6 @@ package space.npstr.magma.events.audio.ws.in;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import space.npstr.magma.EncryptionMode;
-import space.npstr.magma.connections.AudioConnection;
 import space.npstr.magma.events.audio.ws.OpCode;
 import space.npstr.magma.events.audio.ws.SpeakingWsEvent;
 import space.npstr.magma.events.audio.ws.WsEvent;
@@ -69,7 +68,7 @@ public interface InboundWsEvent extends WsEvent {
                     throw new RuntimeException("No / unknown encryption mode: " + mode); //todo how are exceptions handled? ensure json payload is logged
                 }
                 final JSONArray keyArray = sessionD.getJSONArray("secret_key");
-                final byte[] secretKey = new byte[AudioConnection.DISCORD_SECRET_KEY_LENGTH];
+                final byte[] secretKey = new byte[32];
                 for (int i = 0; i < keyArray.length(); i++) {
                     secretKey[i] = (byte) keyArray.getInt(i);
                 }

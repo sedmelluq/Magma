@@ -1,33 +1,15 @@
-buildscript {
-    ext {
-        grgitVersion = '2.1.2'
-        aptPluginVersion = '0.15'
-    }
-    repositories {
-        maven { //noinspection GroovyAssignabilityCheck
-            url 'https://plugins.gradle.org/m2/'
-        }
-        mavenCentral()
-    }
-    dependencies {
-        classpath "org.ajoberstar:grgit:${grgitVersion}"
-        classpath "net.ltgt.gradle:gradle-apt-plugin:${aptPluginVersion}"
-    }
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'idea'
+    id 'net.ltgt.apt-idea' version '0.15'
 }
 
-apply plugin: 'idea'
-apply plugin: 'java'
-apply plugin: 'java-library'
-apply plugin: 'maven-publish'
-apply plugin: 'org.ajoberstar.grgit'
-apply plugin: 'net.ltgt.apt-idea'
-
-
 group = "space.npstr.magma"
-version = "${getMyVersion()}"
+version = (new Date()).format('yy.MM.dd-HH.mm.ss', TimeZone.getTimeZone('UTC'))
 
-sourceCompatibility = 10
-targetCompatibility = 10
+sourceCompatibility = 8
+targetCompatibility = 8
 
 repositories {
     jcenter()
@@ -35,10 +17,16 @@ repositories {
     maven { //noinspection GroovyAssignabilityCheck
         url 'https://jitpack.io'
     }
+    maven {
+        url 'https://dl.bintray.com/sedmelluq/com.sedmelluq/'
+    }
+    mavenLocal()
 }
 
 dependencies {
-    compile group: 'club.minnced', name: 'opus-java', version: '1.0.0'
+    compile 'com.sedmelluq:lava-discord-dispatch:0.1.1'
+    compile 'com.sedmelluq:lava-discord-reactor-udp:0.1.0'
+
     compile group: 'org.json', name: 'json', version: '20180130'
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
 
@@ -127,8 +115,8 @@ publishing {
                 //noinspection GroovyAssignabilityCheck
                 classifier 'sources'
             }
-            groupId project.group
-            artifactId project.name
+            groupId 'com.sedmelluq'
+            artifactId 'magma-zero-allocation'
             //noinspection GroovyAssignabilityCheck
             version project.version
             pom.withXml {

@@ -16,7 +16,7 @@
 
 package space.npstr.magma.events.audio.lifecycle;
 
-import net.dv8tion.jda.core.audio.AudioSendHandler;
+import com.sedmelluq.lava.discord.dispatch.OpusFrameProvider;
 import org.immutables.value.Value;
 import space.npstr.magma.Member;
 import space.npstr.magma.immutables.ImmutableLcEvent;
@@ -33,5 +33,5 @@ public abstract class UpdateSendHandler implements LifecycleEvent {
     @Override
     public abstract Member getMember();
 
-    public abstract Optional<AudioSendHandler> getAudioSendHandler();
+    public abstract Optional<OpusFrameProvider> getAudioSendHandler();
 }

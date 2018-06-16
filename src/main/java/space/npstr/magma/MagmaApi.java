@@ -16,8 +16,8 @@
 
 package space.npstr.magma;
 
-import net.dv8tion.jda.core.audio.AudioSendHandler;
-import net.dv8tion.jda.core.audio.factory.IAudioSendFactory;
+import com.sedmelluq.lava.discord.dispatch.OpusFrameProvider;
+import com.sedmelluq.lava.discord.dispatch.AudioSendSystemFactory;
 import org.xnio.OptionMap;
 import org.xnio.XnioWorker;
 
@@ -33,7 +33,7 @@ public interface MagmaApi {
     /**
      * Please see full factory documentation below. Missing parameters on this factory method are optional.
      */
-    static MagmaApi of(final Function<Member, IAudioSendFactory> sendFactoryProvider) {
+    static MagmaApi of(final Function<Member, AudioSendSystemFactory> sendFactoryProvider) {
         return of(sendFactoryProvider, OptionMap.builder().getMap());
     }
 
@@ -42,11 +42,11 @@ public interface MagmaApi {
      * several bot accounts. A single instance of this scales automatically according to your needs and hardware.
      *
      * @param sendFactoryProvider
-     *         a provider of {@link IAudioSendFactory}s. It will have members applied to it.
+     *         a provider of {@link AudioSendSystemFactory}s. It will have members applied to it.
      * @param xnioOptions
      *         options to build the {@link XnioWorker} that will be used for the websocket connections
      */
-    static MagmaApi of(final Function<Member, IAudioSendFactory> sendFactoryProvider,
+    static MagmaApi of(final Function<Member, AudioSendSystemFactory> sendFactoryProvider,
                        final OptionMap xnioOptions) {
         return new Magma(sendFactoryProvider, xnioOptions);
     }
@@ -74,7 +74,7 @@ public interface MagmaApi {
     void provideVoiceServerUpdate(final Member member, final ServerUpdate serverUpdate);
 
     /**
-     * Set the {@link AudioSendHandler} for a bot member.
+     * Set the {@link OpusFrameProvider} for a bot member.
      *
      * @param member
      *         user id + guild id of the bot member for which the send handler shall be set
@@ -84,10 +84,10 @@ public interface MagmaApi {
      *
      * @see Member
      */
-    void setSendHandler(final Member member, final AudioSendHandler sendHandler);
+    void setSendHandler(final Member member, final OpusFrameProvider sendHandler);
 
     /**
-     * Remove the {@link AudioSendHandler} for a bot member.
+     * Remove the {@link OpusFrameProvider} for a bot member.
      *
      * @param member
      *         user id + guild id of the bot member for which the send handler shall be removed
